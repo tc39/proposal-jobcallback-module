@@ -3,6 +3,7 @@
 This is the repo for the nomative change of https://github.com/tc39/ecma262/pull/3195.
 
 Status: Stage 2
+
 Champions: Chengzhong Wu ([@legendecas](https://github.com/legendecas))
 
 ## Motivation
