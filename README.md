@@ -44,10 +44,6 @@ However, HTML spec defines that the active ScriptOrModule is saved at the time o
 is invoked rather than at the time of HostEnqueuePromiseJob is invoked. The two
 host hooks are invoked with the same active script or module consecutively.
 
-Update the steps of `HostMakeJobCallback`, `HostCallJobCallback`, and 
-`HostEnqueuePromiseJob` to fix the inconsistency between ecma262 and
-the HTML spec.
-
 This change also mandates that the active scripts are propagated through
 promise jobs and FinalizationRegistry cleanup callbacks.
 
