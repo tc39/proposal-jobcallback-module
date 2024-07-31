@@ -1,50 +1,93 @@
-# template-for-proposals
+# ecma262#3195
 
-A repository template for ECMAScript proposals.
+This is the repo for the nomative change of https://github.com/tc39/ecma262/pull/3195.
 
-## Before creating a proposal
+## Motivation
 
-Please ensure the following:
-  1. You have read the [process document](https://tc39.github.io/process-document/)
-  1. You have reviewed the [existing proposals](https://github.com/tc39/proposals/)
-  1. You are aware that your proposal requires being a member of TC39, or locating a TC39 delegate to “champion” your proposal
+The goal is avoid revealing internal slot [[PromiseState]] with
+`promise.then(onFulfill, onRejection)` to the promise handlers by
+host hook requirement.
 
-## Create your proposal repo
+ECMA262 [HostEnqueuePromiseJob](https://tc39.es/ecma262/#sec-hostenqueuepromisejob)
+defines that a host must implement it as:
 
-Follow these steps:
-  1. Click the green [“use this template”](https://github.com/tc39/template-for-proposals/generate) button in the repo header. (Note: Do not fork this repo in GitHub's web interface, as that will later prevent transfer into the TC39 organization)
-  1. Update ecmarkup and the biblio to the latest version: `npm install --save-dev ecmarkup@latest && npm install --save-dev --save-exact @tc39/ecma262-biblio@latest`.
-  1. Go to your repo settings page:
-      1. Under “General”, under “Features”, ensure “Issues” is checked, and disable “Wiki”, and “Projects” (unless you intend to use Projects)
-      1. Under “Pull Requests”, check “Always suggest updating pull request branches” and “automatically delete head branches”
-      1. Under the “Pages” section on the left sidebar, and set the source to “deploy from a branch” and check “Enforce HTTPS”
-      1. Under the “Actions” section on the left sidebar, under “General”, select “Read and write permissions” under “Workflow permissions” and click “Save”
-  1. [“How to write a good explainer”][explainer] explains how to make a good first impression.
+- Let scriptOrModule be [GetActiveScriptOrModule](https://tc39.es/ecma262/#sec-getactivescriptormodule)()
+  at the time HostEnqueuePromiseJob is invoked. If realm is not null, each time job is invoked the
+  implementation must perform [implementation-defined](https://tc39.es/ecma262/#implementation-defined)
+  steps such that scriptOrModule is the [active script or module](https://tc39.es/ecma262/#job-activescriptormodule)
+  at the time of job's invocation.
 
-      > Each TC39 proposal should have a `README.md` file which explains the purpose
-      > of the proposal and its shape at a high level.
-      >
-      > ...
-      >
-      > The rest of this page can be used as a template ...
+The timing of `HostEnqueuePromiseJob` depends on internal Promise
+`[[PromiseState]]`. The motivation instead expect the `ActiveScriptOrModule`
+been determined AT the time `promise.then()` is invoked.
 
-      Your explainer can point readers to the `index.html` generated from `spec.emu`
-      via markdown like
+```js
+// module A
+const {promise, resolve} = Promise.withResolvers();
+promise.then(handler); // (1)
 
-      ```markdown
-      You can browse the [ecmarkup output](https://ACCOUNT.github.io/PROJECT/)
-      or browse the [source](https://github.com/ACCOUNT/PROJECT/blob/HEAD/spec.emu).
-      ```
+// module B
+resolve(); // HostEnqueuPromiseJob for (1)
+promise.then(handler); // (2) HostEnqueuPromiseJob
+```
 
-      where *ACCOUNT* and *PROJECT* are the first two path elements in your project's Github URL.
-      For example, for github.com/**tc39**/**template-for-proposals**, *ACCOUNT* is “tc39”
-      and *PROJECT* is “template-for-proposals”.
+That is, in the above example, the ActiveScriptOrModule for the handler at call site (1)
+should be "module A", and at call site (2) should be "module B".
 
+## HTML integration
 
-## Maintain your proposal repo
+HTML [HostEnqueuePromiseJob](https://html.spec.whatwg.org/multipage/webappapis.html#hostenqueuepromisejob)
+doesn't follow the requirements of ecma262.
 
-  1. Make your changes to `spec.emu` (ecmarkup uses HTML syntax, but is not HTML, so I strongly suggest not naming it “.html”)
-  1. Any commit that makes meaningful changes to the spec, should run `npm run build` to verify that the build will succeed and the output looks as expected.
-  1. Whenever you update `ecmarkup`, run `npm run build` to verify that the build will succeed and the output looks as expected.
+However, HTML spec defines that the active ScriptOrModule is saved at the time of
+[HostMakeJobCallback](https://html.spec.whatwg.org/multipage/webappapis.html#hostmakejobcallback)
+is invoked rather than at the time of HostEnqueuePromiseJob is invoked. The two
+host hooks are invoked with the same active script or module consecutively.
 
-  [explainer]: https://github.com/tc39/how-we-work/blob/HEAD/explainer.md
+Update the steps of `HostMakeJobCallback`, `HostCallJobCallback`, and 
+`HostEnqueuePromiseJob` to fix the inconsistency between ecma262 and
+the HTML spec.
+
+This change also mandates that the active scripts are propagated through
+promise jobs and FinalizationRegistry cleanup callbacks.
+
+For example, the following example uses HTML APIs that depends on the original
+script's incumbent document URL.
+
+```js
+const frame = frames[0];
+const setLocationHref = Object
+  .getOwnPropertyDescriptor(frame.location, "href")
+  .set
+  .bind(frame.location);
+
+framePromise.resolve("./page-1").then(setLocationHref);
+```
+
+This proposed behavior exists in the HTML spec since HTML
+`HostMakeJobCallback` already propagates the active script. This PR
+fixes the inconsistent requirement on ecma262 `HostEnqueuePromiseJob`
+and HTML `HostMakeJobCallback`.
+
+## Proposed change
+
+Checkout https://github.com/tc39/ecma262/pull/3195
+
+The reality of the implementation status is:
+
+ -  | `resolved.then(f)` | `resolve.then(v => f(v))` | `pending.then(f)` | `pending.then(v => f(v))`
+--- | --- | --- | --- | ---
+HTML | outer | outer | outer | outer
+ECMA-262 | outer | outer | inner | inner
+Chrome/Firefox | inner | outer | inner | outer
+Safari | outer | outer | inner | inner
+
+> - pending is resolve in inner iframe.
+> - f is iframe `setLocationHref`.
+> - outer: url is resolved to outer page.
+> - inner: url is resolved to inner iframe.
+
+Conclusion:
+- ECMA-262 and Safari reveal the `[[PromiseState]]`.
+- Chrome/Firefox don't respect `.then(f)` equals to `.then(v => f(v))`
+- HTML has neither of those problems
