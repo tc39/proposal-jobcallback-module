@@ -78,9 +78,9 @@ The reality of the implementation status is:
  . | `resolved.then(f)` | `resolve.then(v => f(v))` | `pending.then(f)` | `pending.then(v => f(v))`
 --- | --- | --- | --- | ---
 HTML | outer | outer | outer | outer
-ECMA-262 | outer | outer | inner | inner
-Chrome/Firefox | inner | outer | inner | outer
-Safari | outer | outer | inner | inner
+ECMA-262 | outer | outer | ☹️ inner | ☹️ inner
+Chrome/Firefox | ☹️ inner | outer | ☹️ inner | outer
+Safari | outer | outer | ☹️ inner | ☹️ inner
 
 > - pending is resolve in inner iframe.
 > - f is iframe `setLocationHref`.
