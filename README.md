@@ -65,9 +65,7 @@ framePromise.resolve("./page-1").then(setLocationHref);
 ```
 
 This proposed behavior exists in the HTML spec since HTML
-`HostMakeJobCallback` already propagates the active script. This PR
-fixes the inconsistent requirement on ecma262 `HostEnqueuePromiseJob`
-and HTML `HostMakeJobCallback`.
+`HostMakeJobCallback` already propagates the active script.
 
 ## Proposed change
 
@@ -91,3 +89,6 @@ Conclusion:
 - ECMA-262 and Safari reveal the `[[PromiseState]]`.
 - Chrome/Firefox don't respect `.then(f)` equals to `.then(v => f(v))`
 - HTML and the proposed behavior have neither of those problems
+
+The proposed change also fixes the inconsistent requirement on ecma262
+`HostEnqueuePromiseJob` and HTML `HostMakeJobCallback`.
