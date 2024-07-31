@@ -90,4 +90,4 @@ Safari | outer | outer | ☹️ inner | ☹️ inner
 Conclusion:
 - ECMA-262 and Safari reveal the `[[PromiseState]]`.
 - Chrome/Firefox don't respect `.then(f)` equals to `.then(v => f(v))`
-- HTML has neither of those problems
+- HTML and the proposed behavior have neither of those problems
